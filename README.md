@@ -32,6 +32,20 @@ The runtime is intentionally split into three layers:
 2. Control layer (guardrails): operating profiles, strict sync mode, rate limits, retry budgets, and event hooks.
 3. AI layer (optional): insight generation and adaptation suggestions that are validated before application.
 
+```mermaid
+flowchart TD
+  A[Application Calls] --> B[Core Logger and Debugger]
+  B --> C[Control Guardrails]
+  C --> D{AI Engagement Viable}
+  D -->|No| E[Autonomous Runtime Continues]
+  D -->|Yes| F[AI Provider Request]
+  F --> G[Normalize and Validate Response]
+  G --> H[Bounded Adaptation and Sync Actions]
+  H --> I[Events, Health, Stats, Snapshots]
+  E --> I
+  B --> I
+```
+
 If the AI layer is unavailable, the core and control layers continue to function without degradation of baseline observability.
 
 ## Quality of Life Improvements
@@ -49,6 +63,65 @@ Quality-of-life direction for upcoming iterations:
 1. Improve default onboarding examples for common service patterns.
 2. Expand troubleshooting guidance for timeout, retry, and circuit-open scenarios.
 3. Add concise API lookup patterns for frequently used methods.
+
+## Analysis Snapshot (2026-06-10)
+
+The project is currently in a strong feature-rich state, with clear room to rebalance implementation shape, documentation focus, and verification depth.
+
+### Code Stats
+
+- Source files in active implementation paths (`src` + `scripts`): 2
+- Source lines in active implementation paths: 1746
+- Primary implementation file (`src/samiam.ts`): 1667 lines
+- Exported interfaces: 23
+- Exported type aliases: 14
+- Key public method surface (logger, policy, triage, quality, AI controls): 43 methods
+
+### Design Stats
+
+- Runtime layers implemented: 3 (core logger, control guardrails, optional AI)
+- Preset policy families: 3
+  1. Workload logging presets (`api`, `worker`, `batch`, `realtime`)
+  2. Quality guard presets (`api`, `worker`, `batch`, `realtime`)
+  3. Environment AI policy presets (`dev`, `staging`, `prod`)
+- Event contract size: 6 lifecycle events
+- AI engagement stage coverage: 5 stages (`investigate`, `revise`, `repair`, `audit`, `append`)
+
+### Development Stats
+
+- Build pipeline commands: `build`, `typecheck`, `test`, `test:coverage`, `test:ci`, `verify`
+- Current verification baseline:
+  1. `verify`: passing
+  2. Test suites: 1 passing
+  3. Tests: 8 passing
+  4. Coverage: 49.61% lines, 47.34% statements, 50% functions, 40.25% branches
+- Resolved development gaps in this iteration:
+  1. Dependencies were missing in a clean environment before install.
+  2. Test configuration expected a `tests` root, but no tests existed yet.
+  3. Package entrypoints referenced `dist/logger.*` while build artifacts are `dist/samiam.*`.
+  4. Guardrail paths now have automated tests for circuit-open behavior, retry recovery, and strict custom sync policy enforcement.
+
+These findings were converted into concrete updates in this iteration.
+
+## Research -> Revise -> Reiterate Loop
+
+This repository follows an evidence-first loop:
+
+1. Research
+  - Measure source size, API breadth, and policy surface.
+  - Run `verify` to expose environment and pipeline gaps early.
+2. Revise
+  - Correct packaging and CI blockers before adding new behavior.
+  - Add or adjust tests that validate core contracts (sanitization, channel stats, quality guard workflows).
+3. Reiterate
+  - Re-run `verify` and compare quality snapshots before and after each patch.
+  - Keep changes that improve stability and operator clarity; revert unclear deltas.
+
+Recommended next iteration targets:
+
+1. Split `src/samiam.ts` into focused modules (core logging, quality/triage, AI adapter, policy presets) to reduce single-file risk.
+2. Add targeted tests for adaptive review (`log-threshold`, `manual`, `shutdown`) and environment transitions (`dev` <-> `staging` <-> `prod`).
+3. Add CI matrix checks for Node 18 and Node 20 to catch runtime-version drift early.
 
 ## Debugger and Logger QoL Presets
 
