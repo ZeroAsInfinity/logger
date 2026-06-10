@@ -64,6 +64,41 @@ Quality-of-life direction for upcoming iterations:
 2. Expand troubleshooting guidance for timeout, retry, and circuit-open scenarios.
 3. Add concise API lookup patterns for frequently used methods.
 
+### Operator Quick Recipes (QoL)
+
+Use these recipes when you need fast, low-risk adjustments during debugging.
+
+1. Noise clamp in live triage
+
+```ts
+samiam.applyLoggingPolicy('worker');
+samiam.setOperatingProfile('conservative');
+```
+
+2. Fast baseline capture before changes
+
+```ts
+const baseline = samiam.captureTriageSnapshot({
+  label: 'quick-baseline',
+  channels: ['api'],
+});
+console.log(baseline.health, baseline.stats);
+```
+
+3. Bounded manual adaptive review
+
+```ts
+await samiam.forceAdaptiveReview('manual');
+console.log(samiam.getSyncState().stats);
+```
+
+4. Environment posture switch for rollout checks
+
+```ts
+samiam.setRuntimeEnvironment('staging', true);
+console.log(samiam.getRuntimeEnvironment());
+```
+
 ## Analysis Snapshot (2026-06-10)
 
 The project is currently in a strong feature-rich state, with clear room to rebalance implementation shape, documentation focus, and verification depth.
@@ -93,13 +128,14 @@ The project is currently in a strong feature-rich state, with clear room to reba
 - Current verification baseline:
   1. `verify`: passing
   2. Test suites: 1 passing
-  3. Tests: 8 passing
-  4. Coverage: 49.61% lines, 47.34% statements, 50% functions, 40.25% branches
+  3. Tests: 12 passing
+  4. Coverage: 61.17% lines, 58.48% statements, 59.37% functions, 51.08% branches
 - Resolved development gaps in this iteration:
   1. Dependencies were missing in a clean environment before install.
   2. Test configuration expected a `tests` root, but no tests existed yet.
   3. Package entrypoints referenced `dist/logger.*` while build artifacts are `dist/samiam.*`.
-  4. Guardrail paths now have automated tests for circuit-open behavior, retry recovery, and strict custom sync policy enforcement.
+  4. Guardrail paths now have automated tests for circuit-open behavior, retry recovery, strict custom sync policy enforcement, forced/manual adaptive review, log-threshold adaptive review, and shutdown adaptive review.
+  5. CI now validates `npm run verify` across Node 18 and Node 20 on push and pull request.
 
 These findings were converted into concrete updates in this iteration.
 
@@ -120,8 +156,8 @@ This repository follows an evidence-first loop:
 Recommended next iteration targets:
 
 1. Split `src/samiam.ts` into focused modules (core logging, quality/triage, AI adapter, policy presets) to reduce single-file risk.
-2. Add targeted tests for adaptive review (`log-threshold`, `manual`, `shutdown`) and environment transitions (`dev` <-> `staging` <-> `prod`).
-3. Add CI matrix checks for Node 18 and Node 20 to catch runtime-version drift early.
+2. Add targeted tests for queue behavior under sustained burst traffic and close-time queue draining guarantees.
+3. Add CI artifact publishing for coverage reports and trend summaries to make QoL regression review easier per PR.
 
 ## Debugger and Logger QoL Presets
 

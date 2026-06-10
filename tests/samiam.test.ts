@@ -5,6 +5,16 @@ const wait = (ms: number) => new Promise<void>((resolve) => {
 });
 
 describe('Samiam basic runtime behavior', () => {
+  let infoSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    infoSpy.mockRestore();
+  });
+
   it('sanitizes sensitive keys and records stats', () => {
     const samiam = new Samiam({ minLevel: 'debug', enableAdaptiveMode: false, captureErrorStack: false });
     samiam.setTransport(() => {});
@@ -196,5 +206,111 @@ describe('Samiam basic runtime behavior', () => {
     expect(samiam.getStats().syncActionsApplied).toBe(1);
 
     await samiam.close();
+  });
+
+  it('applies adaptive review changes when forced manually', async () => {
+    const samiam = new Samiam({
+      grokApiKey: 'test-key',
+      minLevel: 'debug',
+      enableAdaptiveMode: true,
+      aiEngagementMode: 'viability-gated',
+      notifyOnLevels: ['error'],
+      rateLimitMs: 100,
+    });
+    samiam.setTransport(() => {});
+    samiam.setAiProvider(async () => '{"adaptations":{"minLevel":"warn"},"learnedLessons":["manual review applied"]}');
+
+    await samiam.forceAdaptiveReview('manual');
+
+    const state = samiam.getSyncState();
+    expect(state.config.minLevel).toBe('warn');
+    expect(state.learned.lessons).toContain('manual review applied');
+    expect(state.stats.adaptationsApplied).toBeGreaterThan(0);
+
+    await samiam.close();
+  });
+
+  it('triggers adaptive review at log-threshold under error pressure', async () => {
+    let calls = 0;
+    const samiam = new Samiam({
+      grokApiKey: 'test-key',
+      minLevel: 'debug',
+      enableAdaptiveMode: true,
+      aiEngagementMode: 'viability-gated',
+      aiInvestigateMinRecentErrors: 1,
+      adaptiveReviewLogThreshold: 1,
+      notifyOnLevels: [],
+      rateLimitMs: 100,
+    });
+    samiam.setTransport(() => {});
+    samiam.setAiProvider(async () => {
+      calls += 1;
+      return '{"learnedLessons":["threshold review"]}';
+    });
+
+    samiam.error('trigger-threshold-review', { stage: 'test' });
+    for (let i = 0; i < 40 && calls < 1; i += 1) {
+      await wait(5);
+    }
+
+    let learnedApplied = false;
+    for (let i = 0; i < 40; i += 1) {
+      const state = samiam.getSyncState();
+      if (state.learned.lessons.includes('threshold review')) {
+        learnedApplied = true;
+        break;
+      }
+      await wait(5);
+    }
+
+    expect(calls).toBeGreaterThan(0);
+    expect(learnedApplied).toBe(true);
+
+    await samiam.close();
+  });
+
+  it('runs adaptive review on shutdown when adaptive mode is enabled', async () => {
+    let calls = 0;
+    const samiam = new Samiam({
+      grokApiKey: 'test-key',
+      minLevel: 'debug',
+      enableAdaptiveMode: true,
+      aiEngagementMode: 'always-on',
+      notifyOnLevels: ['error'],
+      adaptiveReviewLogThreshold: 1000,
+      rateLimitMs: 100,
+    });
+    samiam.setTransport(() => {});
+    samiam.setAiProvider(async () => {
+      calls += 1;
+      return '{"learnedLessons":["shutdown review"]}';
+    });
+
+    await samiam.close();
+
+    expect(calls).toBeGreaterThan(0);
+  });
+
+  it('applies enforced environment policy when switching runtimes', () => {
+    const samiam = new Samiam({
+      runtimeEnvironment: 'staging',
+      enforceEnvironmentAiPolicy: true,
+      enableAdaptiveMode: false,
+    });
+    samiam.setTransport(() => {});
+
+    samiam.setRuntimeEnvironment('prod', true);
+    let state = samiam.getSyncState();
+    expect(state.config.runtimeEnvironment).toBe('prod');
+    expect(state.config.aiEngagementMode).toBe('viability-gated');
+    expect(state.config.aiInvestigateErrorRatioThreshold).toBe(0.35);
+    expect(state.config.aiInvestigateMinRecentErrors).toBe(4);
+
+    samiam.setRuntimeEnvironment('dev', true);
+    state = samiam.getSyncState();
+    expect(state.config.runtimeEnvironment).toBe('dev');
+    expect(state.config.aiEngagementMode).toBe('always-on');
+    expect(state.config.aiInvestigateErrorRatioThreshold).toBe(0.15);
+    expect(state.config.aiInvestigateMinRecentErrors).toBe(1);
   });
 });

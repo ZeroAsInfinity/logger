@@ -1423,11 +1423,11 @@ Summary: ${JSON.stringify(summary)}`;
         return appliedCount;
     }
     async close() {
-        this.isClosed = true;
         this.stopAdaptiveReview();
         if (this.config.enableAdaptiveMode && this.config.grokApiKey) {
             await this.triggerAdaptiveReview('shutdown');
         }
+        this.isClosed = true;
         await this.grokQueue.catch(() => { });
         this.logs.length = 0;
         this.activeSpans.clear();
