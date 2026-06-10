@@ -1,6 +1,6 @@
 {
   "name": "logger",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Adaptive TypeScript logger/debugger with optional Grok-powered insight and runtime adaptation.",
   "license": "MIT",
   "author": "Sam Pearson and contributors",
