@@ -219,15 +219,18 @@ describe('Samiam basic runtime behavior', () => {
     });
     samiam.setTransport(() => {});
     samiam.setAiProvider(async () => '{"adaptations":{"minLevel":"warn"},"learnedLessons":["manual review applied"]}');
+    samiam.stopAdaptiveReview();
 
-    await samiam.forceAdaptiveReview('manual');
+    try {
+      await samiam.forceAdaptiveReview('manual');
 
-    const state = samiam.getSyncState();
-    expect(state.config.minLevel).toBe('warn');
-    expect(state.learned.lessons).toContain('manual review applied');
-    expect(state.stats.adaptationsApplied).toBeGreaterThan(0);
-
-    await samiam.close();
+      const state = samiam.getSyncState();
+      expect(state.config.minLevel).toBe('warn');
+      expect(state.learned.lessons).toContain('manual review applied');
+      expect(state.stats.adaptationsApplied).toBeGreaterThan(0);
+    } finally {
+      await samiam.close();
+    }
   });
 
   it('triggers adaptive review at log-threshold under error pressure', async () => {
@@ -247,26 +250,29 @@ describe('Samiam basic runtime behavior', () => {
       calls += 1;
       return '{"learnedLessons":["threshold review"]}';
     });
+    samiam.stopAdaptiveReview();
 
-    samiam.error('trigger-threshold-review', { stage: 'test' });
-    for (let i = 0; i < 40 && calls < 1; i += 1) {
-      await wait(5);
-    }
-
-    let learnedApplied = false;
-    for (let i = 0; i < 40; i += 1) {
-      const state = samiam.getSyncState();
-      if (state.learned.lessons.includes('threshold review')) {
-        learnedApplied = true;
-        break;
+    try {
+      samiam.error('trigger-threshold-review', { stage: 'test' });
+      for (let i = 0; i < 40 && calls < 1; i += 1) {
+        await wait(5);
       }
-      await wait(5);
+
+      let learnedApplied = false;
+      for (let i = 0; i < 40; i += 1) {
+        const state = samiam.getSyncState();
+        if (state.learned.lessons.includes('threshold review')) {
+          learnedApplied = true;
+          break;
+        }
+        await wait(5);
+      }
+
+      expect(calls).toBeGreaterThan(0);
+      expect(learnedApplied).toBe(true);
+    } finally {
+      await samiam.close();
     }
-
-    expect(calls).toBeGreaterThan(0);
-    expect(learnedApplied).toBe(true);
-
-    await samiam.close();
   });
 
   it('runs adaptive review on shutdown when adaptive mode is enabled', async () => {
@@ -285,6 +291,7 @@ describe('Samiam basic runtime behavior', () => {
       calls += 1;
       return '{"learnedLessons":["shutdown review"]}';
     });
+    samiam.stopAdaptiveReview();
 
     await samiam.close();
 
